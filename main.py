@@ -11,32 +11,30 @@ import os
 from base64 import b64encode
 from typing import List
 import io
-
 from fastapi.middleware.cors import CORSMiddleware
 
 app = FastAPI()
 
+# CORS setup
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # lub konkretnie: ["https://dealavo-frontend.onrender.com"]
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-
 # --- CONFIG ---
 FEED_URL = "https://bizneslink.iterra.pl/api/vobis/prices"
 DEALAVO_URL = "https://app.dealavo.com/files/flat_reports/current_dealavo_flat_prices.csv?account_id=3432958&api_key=44RkwUCpjV2xwPyJpeztvHsVP0hIxz9Q"
-CACHE_TTL = 900  # 15 minut
-REDIS_HOST = "localhost"
-REDIS_PORT = 6379
+CACHE_TTL = 900
+REDIS_URL = os.getenv("REDIS_URL", "redis://red-d00e3ik9c44c73fj6fig:6379")
 TRACKED_PRODUCTS_KEY = "tracked_products"
 
 FEED_USERNAME = os.getenv("FEED_USERNAME", "vobis")
 FEED_PASSWORD = os.getenv("FEED_PASSWORD", "JPkkJ887h64da#dasss@@4f56Asawnchasd6hP")
 
-redis_client = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, decode_responses=True)
+redis_client = redis.from_url(REDIS_URL, decode_responses=True)
 
 # --- MODELE ---
 class ProductRequest(BaseModel):
