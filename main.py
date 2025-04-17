@@ -13,6 +13,8 @@ from typing import List
 import io
 from fastapi.middleware.cors import CORSMiddleware
 
+print("🚀 Starting Dealavo FastAPI backend...")
+
 app = FastAPI()
 
 # CORS setup
@@ -34,7 +36,12 @@ TRACKED_PRODUCTS_KEY = "tracked_products"
 FEED_USERNAME = os.getenv("FEED_USERNAME", "vobis")
 FEED_PASSWORD = os.getenv("FEED_PASSWORD", "JPkkJ887h64da#dasss@@4f56Asawnchasd6hP")
 
-redis_client = redis.from_url(REDIS_URL, decode_responses=True)
+try:
+    redis_client = redis.from_url(REDIS_URL, decode_responses=True)
+    print("✅ Redis client initialized.")
+except Exception as e:
+    print("❌ Redis init failed:", e)
+    redis_client = None
 
 # --- MODELE ---
 class ProductRequest(BaseModel):
@@ -47,7 +54,7 @@ class TrackRequest(BaseModel):
 # --- HELPERS ---
 async def fetch_authenticated_feed_data():
     cache_key = "feed_cache"
-    cached = await redis_client.get(cache_key)
+    cached = await redis_client.get(cache_key) if redis_client else None
     if cached:
         return pd.read_json(cached)
 
@@ -68,12 +75,13 @@ async def fetch_authenticated_feed_data():
         })
 
     df = pd.DataFrame(data)
-    await redis_client.set(cache_key, df.to_json(), ex=CACHE_TTL)
+    if redis_client:
+        await redis_client.set(cache_key, df.to_json(), ex=CACHE_TTL)
     return df
 
 async def fetch_dealavo_data(ean: str):
     cache_key = f"dealavo_{ean}"
-    cached = await redis_client.get(cache_key)
+    cached = await redis_client.get(cache_key) if redis_client else None
     if cached:
         return json.loads(cached)
 
@@ -92,7 +100,8 @@ async def fetch_dealavo_data(ean: str):
                 "lowest_price": row.get("min_price"),
                 "seller": row.get("min_price_shop")
             }
-            await redis_client.set(cache_key, json.dumps(result), ex=CACHE_TTL)
+            if redis_client:
+                await redis_client.set(cache_key, json.dumps(result), ex=CACHE_TTL)
             return result
 
     raise HTTPException(status_code=404, detail="Produkt nie znaleziony w Dealavo")
@@ -128,12 +137,13 @@ async def get_product_info(request: ProductRequest):
 
 @app.post("/track")
 async def track_product(req: TrackRequest):
-    await redis_client.sadd(TRACKED_PRODUCTS_KEY, req.ean)
+    if redis_client:
+        await redis_client.sadd(TRACKED_PRODUCTS_KEY, req.ean)
     return {"message": f"Produkt {req.ean} dodany do obserwowanych."}
 
 @app.get("/tracked")
 async def list_tracked_products():
-    eans = await redis_client.smembers(TRACKED_PRODUCTS_KEY)
+    eans = await redis_client.smembers(TRACKED_PRODUCTS_KEY) if redis_client else []
     result = []
     for ean in eans:
         try:
