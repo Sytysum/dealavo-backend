@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: dealavo-backend
+    env: python
+    plan: free
+    buildCommand: ""
+    startCommand: uvicorn main:app --host 0.0.0.0 --port 10000
+    envVars:
+      - key: FEED_USERNAME
+        value: vobis
+      - key: FEED_PASSWORD
+        value: JPkkJ887h64da#dasss@@4f56Asawnchasd6hP
