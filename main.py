@@ -12,7 +12,18 @@ from base64 import b64encode
 from typing import List
 import io
 
+from fastapi.middleware.cors import CORSMiddleware
+
 app = FastAPI()
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # lub konkretnie: ["https://dealavo-frontend.onrender.com"]
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 
 # --- CONFIG ---
 FEED_URL = "https://bizneslink.iterra.pl/api/vobis/prices"
