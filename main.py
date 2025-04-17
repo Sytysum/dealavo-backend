@@ -10,12 +10,13 @@ import json
 import os
 from base64 import b64encode
 from typing import List
+import io
 
 app = FastAPI()
 
 # --- CONFIG ---
 FEED_URL = "https://bizneslink.iterra.pl/api/vobis/prices"
-DEALAVO_URL = "https://app.dealavo.com/files/api/report.json?account_id=3432958&api_key=44RkwUCpjV2xwPyJpeztvHsVP0hIxz9Q"
+DEALAVO_URL = "https://app.dealavo.com/files/flat_reports/current_dealavo_flat_prices.csv?account_id=3432958&api_key=44RkwUCpjV2xwPyJpeztvHsVP0hIxz9Q"
 CACHE_TTL = 900  # 15 minut
 REDIS_HOST = "localhost"
 REDIS_PORT = 6379
@@ -72,15 +73,18 @@ async def fetch_dealavo_data(ean: str):
         if resp.status_code != 200:
             raise HTTPException(status_code=resp.status_code, detail="Dealavo API error")
 
-        data = resp.json()
-        for item in data.get("products", []):
-            if str(item.get("ean")) == ean:
-                result = {
-                    "lowest_price": item.get("min_price"),
-                    "seller": item.get("min_price_shop")
-                }
-                await redis_client.set(cache_key, json.dumps(result), ex=CACHE_TTL)
-                return result
+        df = pd.read_csv(io.StringIO(resp.text))
+        df["ean"] = df["ean"].astype(str)
+        filtered = df[df["ean"] == ean]
+
+        if not filtered.empty:
+            row = filtered.iloc[0]
+            result = {
+                "lowest_price": row.get("min_price"),
+                "seller": row.get("min_price_shop")
+            }
+            await redis_client.set(cache_key, json.dumps(result), ex=CACHE_TTL)
+            return result
 
     raise HTTPException(status_code=404, detail="Produkt nie znaleziony w Dealavo")
 
