@@ -8,7 +8,6 @@ import asyncio
 import redis.asyncio as redis
 import json
 import os
-from base64 import b64encode
 from typing import List
 import io
 from fastapi.middleware.cors import CORSMiddleware
@@ -27,14 +26,11 @@ app.add_middleware(
 )
 
 # --- CONFIG ---
-FEED_URL = "https://bizneslink.iterra.pl/api/vobis/prices"
+FEED_URL = "https://app.dealavo.com/files/uploaded_files/feed_20250417T100321_142.xml?account_id=3432958&api_key=44RkwUCpjV2xwPyJpeztvHsVP0hIxz9Q"
 DEALAVO_URL = "https://app.dealavo.com/files/flat_reports/current_dealavo_flat_prices.csv?account_id=3432958&api_key=44RkwUCpjV2xwPyJpeztvHsVP0hIxz9Q"
 CACHE_TTL = 900
 REDIS_URL = os.getenv("REDIS_URL", "redis://red-d00e3ik9c44c73fj6fig:6379")
 TRACKED_PRODUCTS_KEY = "tracked_products"
-
-FEED_USERNAME = os.getenv("FEED_USERNAME", "vobis")
-FEED_PASSWORD = os.getenv("FEED_PASSWORD", "JPkkJ887h64da#dasss@@4f56Asawnchasd6hP")
 
 try:
     redis_client = redis.from_url(REDIS_URL, decode_responses=True)
@@ -58,13 +54,19 @@ async def fetch_authenticated_feed_data():
     if cached:
         return pd.read_json(cached)
 
-    auth_header = b64encode(f"{FEED_USERNAME}:{FEED_PASSWORD}".encode()).decode()
-    headers = {"Authorization": f"Basic {auth_header}"}
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.get(FEED_URL)
+            response.raise_for_status()
+    except httpx.RequestError as e:
+        print("❌ Błąd podczas pobierania feeda:", e)
+        raise HTTPException(status_code=504, detail="Błąd podczas pobierania danych z feeda")
 
-    async with httpx.AsyncClient() as client:
-        response = await client.get(FEED_URL, headers=headers)
-        response.raise_for_status()
+    try:
         root = ET.fromstring(response.text)
+    except Exception as e:
+        print("❌ Nieprawidłowy XML w feedzie:", e)
+        raise HTTPException(status_code=500, detail="Nieprawidłowy XML w feedzie")
 
     data = []
     for product in root.findall("product"):
